@@ -1,6 +1,3 @@
-/**
- * Валидация входных данных и опций
- */
 function validate(data, options) {
   if (
     !data ||
@@ -24,40 +21,23 @@ function validate(data, options) {
   return { calculateRevenue, calculateBonus };
 }
 
-/**
- * Расчет выручки от конкретной позиции в чеке
- */
 function calculateSimpleRevenue(purchase) {
   const discountPercent = purchase.discount || 0;
   const discountFactor = 1 - (discountPercent / 100);
-  
   return purchase.sale_price * purchase.quantity * discountFactor;
 }
 
-/**
- * Расчет бонуса на основе прибыли и позиции в рейтинге
- */
 function calculateBonusByProfit(index, total, seller) {
   const { profit } = seller;
-
-  // Если продавец единственный, он получает 15%. Если их двое, последний получает 0.
-  if (total > 1 && index === total - 1) {
-    return 0;
-  }
-
+  if (total > 1 && index === total - 1) return 0;
   if (index === 0) return profit * 0.15;
   if (index === 1 || index === 2) return profit * 0.10;
-
   return profit * 0.05;
 }
 
-/**
- * Основная функция анализа данных о продажах
- */
 function analyzeSalesData(data, options) {
   const { calculateRevenue, calculateBonus } = validate(data, options);
 
-  // Подготовка данных: создаем массив объектов для статистики
   const sellerStats = data.sellers.map((seller) => ({
     id: seller.id,
     name: `${seller.first_name} ${seller.last_name}`,
@@ -67,68 +47,57 @@ function analyzeSalesData(data, options) {
     productsSold: {},
   }));
 
-  // Индексация для быстрого доступа O(1)
   const sellerIndex = Object.fromEntries(sellerStats.map((s) => [s.id, s]));
   const productIndex = Object.fromEntries(data.products.map((p) => [p.sku, p]));
 
-  // Шаг 1. Обработка записей о покупках
   data.purchase_records.forEach((record) => {
     const seller = sellerIndex[record.seller_id];
-    
     if (seller) {
       seller.salesCount += 1;
       seller.revenue += record.total_amount;
 
       record.items.forEach((item) => {
         const product = productIndex[item.sku];
-        
         if (product) {
           const cost = product.purchase_price * item.quantity;
           const itemRevenue = calculateRevenue(item, product);
           const itemProfit = itemRevenue - cost;
-
           seller.profit += itemProfit;
 
-          if (!seller.productsSold[item.sku]) {
-            seller.productsSold[item.sku] = 0;
-          }
-          seller.productsSold[item.sku] += item.quantity;
+          seller.productsSold[item.sku] = (seller.productsSold[item.sku] || 0) + item.quantity;
         }
       });
     }
   });
 
-  // Шаг 2. Сортировка продавцов по прибыли (от большего к меньшему)
+  // Сортировка по прибыли
   sellerStats.sort((a, b) => b.profit - a.profit);
 
-  // Шаг 3. Расчет бонусов и топ-товаров
-  sellerStats.forEach((seller, index) => {
-    seller.bonus = calculateBonus(index, sellerStats.length, seller);
+  return sellerStats.map((seller, index) => {
+    const bonusValue = calculateBonus(index, sellerStats.length, seller);
 
-    seller.topProducts = Object.entries(seller.productsSold)
+    // Подготовка топ-10 товаров
+    const topProducts = Object.entries(seller.productsSold)
       .map(([sku, quantity]) => ({ sku, quantity }))
+      // Стабильная сортировка: по убыванию количества, затем по SKU
       .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
       .slice(0, 10);
-  });
 
-  // Шаг 4. Формирование итогового отчета с округлением
-  return sellerStats.map((seller) => ({
-    seller_id: seller.id,
-    name: seller.name,
-    revenue: +seller.revenue.toFixed(2),
-    profit: +seller.profit.toFixed(2),
-    sales_count: seller.salesCount,
-    top_products: seller.topProducts,
-    bonus: +seller.bonus.toFixed(2)
-  }));
+    // Важно: использование Math.round для избежания проблем с точностью float перед округлением
+    const roundToTwo = (num) => Math.round(num * 100) / 100;
+
+    return {
+      seller_id: seller.id,
+      name: seller.name,
+      revenue: roundToTwo(seller.revenue),
+      profit: roundToTwo(seller.profit),
+      sales_count: seller.salesCount,
+      top_products: topProducts,
+      bonus: roundToTwo(bonusValue)
+    };
+  });
 }
 
-// Экспорт для Node.js среды (Jest)
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    validate,
-    calculateSimpleRevenue,
-    calculateBonusByProfit,
-    analyzeSalesData
-  };
+  module.exports = { validate, calculateSimpleRevenue, calculateBonusByProfit, analyzeSalesData };
 }
