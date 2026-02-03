@@ -1,9 +1,14 @@
+
 function validate(data, options) {
   if (
     !data ||
     !Array.isArray(data.sellers) ||
     !Array.isArray(data.products) ||
-    !Array.isArray(data.purchase_records)
+    !Array.isArray(data.purchase_records) ||
+    // Добавлена проверка на пустые массивы, так как тесты ожидают ошибку в этом случае
+    data.sellers.length === 0 ||
+    data.products.length === 0 ||
+    data.purchase_records.length === 0
   ) {
     throw new Error("Некорректные входные данные");
   }
@@ -35,9 +40,10 @@ function validate(data, options) {
  * @returns {number}
  */
 function calculateSimpleRevenue(purchase, _product) {
+  // Исправлено: берем sale_price из записи о покупке (purchase), а не из карточки товара
   const { discount, quantity, sale_price } = purchase;
-   const discountFactor = 1 - (discount / 100);
- return sale_price * quantity * discountFactor;
+  const discountFactor = 1 - (discount / 100);
+  return sale_price * quantity * discountFactor;
   // @TODO: Расчет выручки от операции
 }
 
@@ -92,10 +98,14 @@ function analyzeSalesData(data, options) {
   // @TODO: Расчет выручки и прибыли для каждого продавца
   data.purchase_records.forEach((record) => {
     const seller = sellerIndex[record.seller_id];
+    if (!seller) return; // Проверка на случай, если id продавца не найден
+
     seller.sales_count += 1;
     seller.revenue += record.total_amount;
     record.items.forEach((item) => {
       const product = productIndex[item.sku];
+      if (!product) return;
+
       const cost = product.purchase_price * item.quantity;
 
       // Вычисляем выручку через переданную в опциях функцию
@@ -103,10 +113,10 @@ function analyzeSalesData(data, options) {
       // Прибыль = Выручка - (Себестоимость * Кол-во)
       const profit = revenue - cost;
 
-     seller.profit += profit;
+      seller.profit += profit;
 
-       if (!seller.products_sold[item.sku]) {
-                seller.products_sold[item.sku] = 0;
+      if (!seller.products_sold[item.sku]) {
+        seller.products_sold[item.sku] = 0;
       }
       seller.products_sold[item.sku] += item.quantity;
     });
@@ -123,13 +133,14 @@ function analyzeSalesData(data, options) {
 
     // 2. Формируем топ-10 товаров
     seller.top_products = Object.entries(seller.products_sold) // [[sku, qty], [sku, qty]]
-        .map(([sku, quantity]) => ({ sku, quantity }))         // [{sku, quantity}, ...]
-        .sort((a, b) => b.quantity - a.quantity)               // Сортировка по убыванию количества
-        .slice(0, 10);                                         // Только первые 10 элементов
-});
+      .map(([sku, quantity]) => ({ sku, quantity }))         // [{sku, quantity}, ...]
+      // Сортировка по убыванию количества + по алфавиту SKU для стабильности тестов
+      .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
+      .slice(0, 10);                                         // Только первые 10 элементов
+  });
 
   // @TODO: Подготовка итоговой коллекции с нужными полями
- return sellerStats.map(seller => ({
+  return sellerStats.map(seller => ({
     seller_id: seller.id,
     name: seller.name,
     // Округляем до 2 знаков и преобразуем обратно в число (+)
@@ -138,9 +149,15 @@ function analyzeSalesData(data, options) {
     sales_count: seller.sales_count,
     top_products: seller.top_products,
     bonus: +seller.bonus.toFixed(2)
-}));
+  }));
 }
 
-
-
-
+// Экспорт для Node.js/Jest среды
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    validate,
+    calculateSimpleRevenue,
+    calculateBonusByProfit,
+    analyzeSalesData
+  };
+}
