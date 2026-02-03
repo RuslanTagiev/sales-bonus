@@ -21,29 +21,19 @@ function validate(data, options) {
   return { calculateRevenue, calculateBonus };
 }
 
-/**
- * Функция расчёта выручки (со скидкой)
- */
 function calculateSimpleRevenue(purchase, _product) {
   const discount = 1 - (purchase.discount / 100);
   return purchase.sale_price * purchase.quantity * discount;
 }
 
-/**
- * Функция расчёта бонусов
- */
 function calculateBonusByProfit(index, total, seller) {
   const { profit } = seller;
-  
   if (index === 0) return profit * 0.15;
   if (index === 1 || index === 2) return profit * 0.10;
   if (index === total - 1) return 0;
   return profit * 0.05;
 }
 
-/**
- * Главная функция анализа данных продаж
- */
 function analyzeSalesData(data, options) {
   const { calculateRevenue, calculateBonus } = validate(data, options);
 
@@ -61,44 +51,42 @@ function analyzeSalesData(data, options) {
   
   data.purchase_records.forEach(record => {
     const seller = sellerIndex[record.seller_id];
-    if (!seller) return;
+    if (seller) {
+      seller.sales_count += 1;
+      // Используем total_amount из чека для поля revenue
+      seller.revenue += record.total_amount; 
 
-    seller.sales_count += 1;
-    // Убрано накопление total_amount, теперь считаем по позициям
-    
-    record.items.forEach(item => {
-      const product = productIndex[item.sku];
-      if (product) {
-        // Считаем чистую выручку позиции (со скидкой)
-        const itemRevenue = calculateRevenue(item, product);
-        const cost = product.purchase_price * item.quantity;
-        
-        // Накапливаем выручку и прибыль продавца
-        seller.revenue += itemRevenue; 
-        seller.profit += (itemRevenue - cost);
+      record.items.forEach(item => {
+        const product = productIndex[item.sku];
+        if (product) {
+          const cost = product.purchase_price * item.quantity;
+          const itemRevenue = calculateRevenue(item, product);
+          
+          // Считаем прибыль
+          seller.profit += (itemRevenue - cost);
 
-        if (!seller.products_sold[item.sku]) {
-          seller.products_sold[item.sku] = 0;
+          if (!seller.products_sold[item.sku]) {
+            seller.products_sold[item.sku] = 0;
+          }
+          // Увеличиваем количество проданного товара
+          seller.products_sold[item.sku] += item.quantity;
         }
-        seller.products_sold[item.sku] += item.quantity;
-      }
-    });
+      });
+    }
   });
 
-  // Сортировка по прибыли (DESC)
+  // Сортировка по прибыли
   sellerStats.sort((a, b) => b.profit - a.profit);
 
-  // Назначение премий и формирование топ-10 продуктов
   sellerStats.forEach((seller, index) => {
     seller.bonus = calculateBonus(index, sellerStats.length, seller);
     seller.top_products = Object.entries(seller.products_sold)
       .map(([sku, quantity]) => ({ sku, quantity }))
-      // Стабильная сортировка по количеству (DESC) + по SKU (ASC)
+      // Добавлена стабильная сортировка по SKU
       .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
       .slice(0, 10);
   });
 
-  // Финальное округление ТОЛЬКО здесь
   return sellerStats.map(seller => ({
     seller_id: seller.id,
     name: seller.name,
