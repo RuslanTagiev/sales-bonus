@@ -146,7 +146,12 @@ function analyzeSalesData(data, options) {
 }));
 }
 
+module.exports = {
+  validate,
+  calculateSimpleRevenue,
+  calculateBonusByProfit,
+  analyzeSalesData
+};
 
 
 
-//Шаг 2. Упорядочите продавцов по прибыли
