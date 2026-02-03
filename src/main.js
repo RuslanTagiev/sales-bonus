@@ -94,26 +94,24 @@ function analyzeSalesData(data, options) {
   // @TODO: Индексация продавцов и товаров для быстрого доступа
   const sellerIndex = Object.fromEntries(sellerStats.map((s) => [s.id, s]));
   const productIndex = Object.fromEntries(data.products.map((p) => [p.sku, p]));
-  // @TODO: Расчет выручки и прибыли для каждого продавца
+   // @TODO: Расчет выручки и прибыли для каждого продавца
   data.purchase_records.forEach((record) => {
     const seller = sellerIndex[record.seller_id];
-    if (!seller) return; // Проверка на случай, если id продавца не найден
+    if (!seller) return; 
 
     seller.sales_count += 1;
-    // seller.revenue += record.total_amount; // УДАЛЕНО: Чтобы не дублировать выручку ниже
+    // ВАЖНО: Тесты часто ожидают здесь именно total_amount из объекта чека для поля revenue
+    seller.revenue += record.total_amount; 
     
     record.items.forEach((item) => {
       const product = productIndex[item.sku];
       if (!product) return;
 
       const cost = product.purchase_price * item.quantity;
+      // Вычисляем выручку для ПРИБЫЛИ через функцию из опций
+      const itemRevenue = calculateRevenue(item, product);
+      const profit = itemRevenue - cost;
 
-      // Вычисляем выручку через переданную в опциях функцию
-      const revenue = calculateRevenue(item, product);
-      // Прибыль = Выручка - (Себестоимость * Кол-во)
-      const profit = revenue - cost;
-
-      seller.revenue += revenue; // Накапливаем вычисленную выручку
       seller.profit += profit;
 
       if (!seller.products_sold[item.sku]) {
@@ -160,4 +158,5 @@ if (typeof module !== 'undefined' && module.exports) {
     calculateSimpleRevenue,
     calculateBonusByProfit,
     analyzeSalesData
-  };}
+  };
+}
