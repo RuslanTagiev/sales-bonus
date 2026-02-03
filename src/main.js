@@ -21,14 +21,16 @@ function validate(data, options) {
   return { calculateRevenue, calculateBonus };
 }
 
-function calculateSimpleRevenue(purchase) {
-  const discountPercent = purchase.discount || 0;
+function calculateSimpleRevenue(item, product) {
+  // Важно: берем цену из записи о продаже (item), а не из каталога (product)
+  const discountPercent = item.discount || 0;
   const discountFactor = 1 - (discountPercent / 100);
-  return purchase.sale_price * purchase.quantity * discountFactor;
+  return item.sale_price * item.quantity * discountFactor;
 }
 
 function calculateBonusByProfit(index, total, seller) {
   const { profit } = seller;
+  // Последний в рейтинге (если продавцов больше одного) бонус не получает
   if (total > 1 && index === total - 1) return 0;
   if (index === 0) return profit * 0.15;
   if (index === 1 || index === 2) return profit * 0.10;
@@ -54,37 +56,36 @@ function analyzeSalesData(data, options) {
     const seller = sellerIndex[record.seller_id];
     if (seller) {
       seller.salesCount += 1;
-      seller.revenue += record.total_amount;
 
       record.items.forEach((item) => {
         const product = productIndex[item.sku];
         if (product) {
-          const cost = product.purchase_price * item.quantity;
+          // ВЫРУЧКА: Считаем через функцию, а не берем total_amount из записи
           const itemRevenue = calculateRevenue(item, product);
-          const itemProfit = itemRevenue - cost;
-          seller.profit += itemProfit;
-
+          const cost = product.purchase_price * item.quantity;
+          
+          seller.revenue += itemRevenue;
+          seller.profit += (itemRevenue - cost);
           seller.productsSold[item.sku] = (seller.productsSold[item.sku] || 0) + item.quantity;
         }
       });
     }
   });
 
-  // Сортировка по прибыли
+  // Сортировка по прибыли (от большего к меньшему)
   sellerStats.sort((a, b) => b.profit - a.profit);
 
   return sellerStats.map((seller, index) => {
+    // Бонус считается от "грязной" прибыли до округления
     const bonusValue = calculateBonus(index, sellerStats.length, seller);
 
-    // Подготовка топ-10 товаров
     const topProducts = Object.entries(seller.productsSold)
       .map(([sku, quantity]) => ({ sku, quantity }))
-      // Стабильная сортировка: по убыванию количества, затем по SKU
-      .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
+      // Сортировка: сначала по количеству (desc), затем по алфавиту SKU (desc) для стабильности
+      .sort((a, b) => b.quantity - a.quantity || b.sku.localeCompare(a.sku))
       .slice(0, 10);
 
-    // Важно: использование Math.round для избежания проблем с точностью float перед округлением
-    const roundToTwo = (num) => Math.round(num * 100) / 100;
+    const roundToTwo = (num) => Number(Math.round(num + "e2") + "e-2");
 
     return {
       seller_id: seller.id,
