@@ -3,11 +3,7 @@ function validate(data, options) {
     !data ||
     !Array.isArray(data.sellers) ||
     !Array.isArray(data.products) ||
-    !Array.isArray(data.purchase_records) ||
-    !Array.isArray(data.customers) ||
-    data.sellers.length === 0 ||
-    data.products.length === 0 ||
-    data.purchase_records.length === 0
+    !Array.isArray(data.purchase_records)
   ) {
     throw new Error("Некорректные входные данные");
   }
@@ -39,8 +35,7 @@ function validate(data, options) {
  * @returns {number}
  */
 function calculateSimpleRevenue(purchase, _product) {
-  const { discount, quantity } = purchase;
-  const { sale_price } = _product;
+  const { discount, quantity, sale_price } = purchase;
    const discountFactor = 1 - (discount / 100);
  return sale_price * quantity * discountFactor;
   // @TODO: Расчет выручки от операции
@@ -146,12 +141,6 @@ function analyzeSalesData(data, options) {
 }));
 }
 
-module.exports = {
-  validate,
-  calculateSimpleRevenue,
-  calculateBonusByProfit,
-  analyzeSalesData
-};
 
 
 
