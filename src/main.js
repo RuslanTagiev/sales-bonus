@@ -1,4 +1,3 @@
-
 function validate(data, options) {
   if (
     !data ||
@@ -101,7 +100,8 @@ function analyzeSalesData(data, options) {
     if (!seller) return; // Проверка на случай, если id продавца не найден
 
     seller.sales_count += 1;
-    seller.revenue += record.total_amount;
+    // seller.revenue += record.total_amount; // УДАЛЕНО: Чтобы не дублировать выручку ниже
+    
     record.items.forEach((item) => {
       const product = productIndex[item.sku];
       if (!product) return;
@@ -113,6 +113,7 @@ function analyzeSalesData(data, options) {
       // Прибыль = Выручка - (Себестоимость * Кол-во)
       const profit = revenue - cost;
 
+      seller.revenue += revenue; // Накапливаем вычисленную выручку
       seller.profit += profit;
 
       if (!seller.products_sold[item.sku]) {
@@ -159,5 +160,4 @@ if (typeof module !== 'undefined' && module.exports) {
     calculateSimpleRevenue,
     calculateBonusByProfit,
     analyzeSalesData
-  };
-}
+  };}
