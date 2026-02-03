@@ -1,3 +1,11 @@
+/**
+ * Вспомогательная функция для точного округления чисел с плавающей запятой (до 2 знаков)
+ */
+const preciseRound = (value) => {
+  return Number(Math.round(value + 'e2') + 'e-2');
+};
+
+
 function validate(data, options) {
   if (
     !data ||
@@ -32,7 +40,7 @@ function validate(data, options) {
 function calculateSimpleRevenue(purchase, _product) {
   // Коэффициент для расчета суммы без скидки
   const discount = 1 - (purchase.discount / 100);
-  // Формула: sale_price × количество × скидка
+  // Формула: sale_price × количество × скидка (без промежуточного округления)
   return purchase.sale_price * purchase.quantity * discount;
   // @TODO: Расчет выручки от операции
 }
@@ -87,36 +95,31 @@ function analyzeSalesData(data, options) {
   data.purchase_records.forEach(record => {
     const seller = sellerIndex[record.seller_id]; // Продавец
     if (seller) {
-      // Увеличить количество продаж
+      // Число продаж на 1
       seller.sales_count += 1;
-      // Увеличить общую сумму выручки всех продаж. Используем total_amount, как прописано в Шаге 1
-      seller.revenue += record.total_amount; 
-      
+      // Используем ГРЯЗНУЮ выручку (без скидки), как на вашем скриншоте DevTools
       record.items.forEach(item => {
         const product = productIndex[item.sku]; // Товар
         if (product) {
-          // Посчитать себестоимость (cost) товара как product.purchase_price, умноженную на количество товаров из чека
+          const grossRevenue = item.sale_price * item.quantity;
+          const netRevenue = calculateRevenue(item, product);
           const cost = product.purchase_price * item.quantity;
-          // Посчитать выручку (revenue) с учётом скидки через функцию calculateRevenue
-          const itemRevenue = calculateRevenue(item, product);
-          // Посчитать прибыль: выручка минус себестоимость
-          const itemProfit = itemRevenue - cost;
-          
-          // Увеличить общую накопленную прибыль (profit) у продавца
-          seller.profit += itemProfit;
 
-          // Учёт количества проданных товаров
+          seller.revenue += grossRevenue; // Накапливаем грязную выручку
+          seller.profit += (netRevenue - cost); // Накапливаем прибыль
+
+          // Учёт количества проданных товаров (динамический словарь)
           if (!seller.products_sold[item.sku]) {
             seller.products_sold[item.sku] = 0;
           }
-          // По артикулу товара увеличить его проданное количество у продавца
+          // Увеличиваем количество проданного товара
           seller.products_sold[item.sku] += item.quantity;
         }
       });
     }
   });
 
-  // Шаг 2. Упорядочите продавцов по прибыли (От большего к меньшему (descending))
+  // Шаг 2. Сортировка продавцов по прибыли (От большего к меньшему (descending))
   sellerStats.sort((a, b) => b.profit - a.profit);
 
   // Шаг 3. Назначьте премии на основе ранжирования
@@ -125,13 +128,9 @@ function analyzeSalesData(data, options) {
     seller.bonus = calculateBonus(index, sellerStats.length, seller);
 
     // 2. Формируем топ-10 товаров
-    // Преобразовать seller.products_sold из объекта вида {[sku]: quantity} в массив вида [[sku, quantity], …]
     seller.top_products = Object.entries(seller.products_sold)
-      // Трансформируйте массив вида [[key, value]] в [{sku, quantity}]
       .map(([sku, quantity]) => ({ sku, quantity }))         
-      // Отсортируйте массив по убыванию количества товаров quantity (добавлена стабильная сортировка по SKU)
       .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
-      // Отделите от массива первые 10 элементов
       .slice(0, 10);
   });
 
@@ -139,14 +138,12 @@ function analyzeSalesData(data, options) {
   return sellerStats.map(seller => ({
     seller_id: seller.id, // Строка, идентификатор продавца
     name: seller.name,     // Строка, имя продавца
-    // Число с двумя знаками после точки, выручка продавца (+someNum.toFixed(2))
-    revenue: +seller.revenue.toFixed(2),
-    // Число с двумя знаками после точки, прибыль продавца
-    profit: +seller.profit.toFixed(2),
-    sales_count: seller.sales_count, // Целое число, количество продаж продавца
-    // Массив объектов вида: { "sku": "SKU_008","quantity": 10}, топ-10 товаров продавца
-    top_products: seller.top_products,
-    bonus: +seller.bonus.toFixed(2) // Число с двумя знаками после точки, бонус продавца
+    // Используем точное округление в самом конце
+    revenue: preciseRound(seller.revenue),
+    profit: preciseRound(seller.profit),
+    sales_count: seller.sales_count, // Целое число
+    top_products: seller.top_products, 
+    bonus: preciseRound(seller.bonus)
   }));
 }
 
