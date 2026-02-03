@@ -22,18 +22,17 @@ function validate(data, options) {
 }
 
 /**
- * Этап 3. Реализация бизнес-логики
- * Функция расчёта выручки (Шаг 1)
+ * Шаг 1. Реализация функции расчёта выручки (бизнес-логика)
  */
 function calculateSimpleRevenue(purchase, _product) {
   // Коэффициент для расчета суммы без скидки
   const discount = 1 - (purchase.discount / 100);
-  // Выручка: sale_price * quantity * discount
+  // Формула: sale_price × количество × скидка
   return purchase.sale_price * purchase.quantity * discount;
 }
 
 /**
- * Функция расчёта бонусов (Шаг 3)
+ * Шаг 3. Реализация функции расчёта бонусов (бизнес-логика)
  */
 function calculateBonusByProfit(index, total, seller) {
   const { profit } = seller;
@@ -53,9 +52,10 @@ function calculateBonusByProfit(index, total, seller) {
  * Главная функция анализа данных продаж
  */
 function analyzeSalesData(data, options) {
+  // Получаем функции из валидации
   const { calculateRevenue, calculateBonus } = validate(data, options);
 
-  // Подготовка промежуточных данных
+  // Подготовка промежуточных данных для сбора статистики
   const sellerStats = data.sellers.map((seller) => ({
     id: seller.id,
     name: `${seller.first_name} ${seller.last_name}`,
@@ -65,33 +65,33 @@ function analyzeSalesData(data, options) {
     products_sold: {},
   }));
 
+  // Индексация для быстрого доступа
   const sellerIndex = Object.fromEntries(sellerStats.map((s) => [s.id, s]));
   const productIndex = Object.fromEntries(data.products.map((p) => [p.sku, p]));
   
   // Шаг 1. Двойной цикл перебора чеков и покупок
   data.purchase_records.forEach(record => {
     const seller = sellerIndex[record.seller_id];
-    
     if (seller) {
-      // Число продаж sales_count — на 1
+      // Число продаж на 1
       seller.sales_count += 1;
-      // Сумма выручки revenue — на общую сумму чека total_amount
+      // Выручка на общую сумму чека total_amount
       seller.revenue += record.total_amount; 
 
       record.items.forEach(item => {
         const product = productIndex[item.sku];
-        
         if (product) {
-          // Себестоимость cost
+          // Себестоимость товара
           const cost = product.purchase_price * item.quantity;
-          // Выручка через calculateRevenue
-          const revenue = calculateRevenue(item, product);
-          // Прибыль
-          const profit = revenue - cost;
+          // Выручка позиции через функцию calculateRevenue
+          const itemRevenue = calculateRevenue(item, product);
+          // Прибыль позиции
+          const itemProfit = itemRevenue - cost;
           
-          seller.profit += profit;
+          // Накапливаем общую прибыль продавца
+          seller.profit += itemProfit;
 
-          // Учёт количества проданных товаров
+          // Учёт количества проданных товаров (динамический словарь)
           if (!seller.products_sold[item.sku]) {
             seller.products_sold[item.sku] = 0;
           }
@@ -101,23 +101,23 @@ function analyzeSalesData(data, options) {
     }
   });
 
-  // Шаг 2. Упорядочивание продавцов по прибыли (DESC)
+  // Шаг 2. Сортировка продавцов по прибыли (от большего к меньшему)
   sellerStats.sort((a, b) => b.profit - a.profit);
 
   // Шаг 3. Назначение премий и формирование топ-10 продуктов
   sellerStats.forEach((seller, index) => {
-    // Бонус
+    // Считаем бонус
     seller.bonus = calculateBonus(index, sellerStats.length, seller);
 
-    // Топ-10 продуктов
+    // Формируем топ-10 товаров
     seller.top_products = Object.entries(seller.products_sold)
       .map(([sku, quantity]) => ({ sku, quantity }))
-      // Сортировка по убыванию количества + по алфавиту SKU для стабильности
+      // Сортировка по количеству (DESC) + по SKU (ASC) для стабильности тестов
       .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
       .slice(0, 10);
   });
 
-  // Шаг 4. Формирование результата
+  // Шаг 4. Формирование итогового отчёта
   return sellerStats.map(seller => ({
     seller_id: seller.id,
     name: seller.name,
@@ -129,7 +129,7 @@ function analyzeSalesData(data, options) {
   }));
 }
 
-// Экспорт для тестов
+// Экспорт для Node.js среды (Jest)
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     validate,
