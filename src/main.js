@@ -1,3 +1,9 @@
+const preciseRound = (value, decimals) => {
+  const factor = Math.pow(10, decimals);
+  return Math.round(value * factor) / factor;
+};
+
+
 function validate(data, options) {
   if (
     !data ||
@@ -23,15 +29,16 @@ function validate(data, options) {
 
 function calculateSimpleRevenue(purchase, _product) {
   const discount = 1 - (purchase.discount / 100);
-  return purchase.sale_price * purchase.quantity * discount;
+  return preciseRound(purchase.sale_price * purchase.quantity * discount, 2);
 }
 
 function calculateBonusByProfit(index, total, seller) {
   const { profit } = seller;
-  if (index === 0) return profit * 0.15;
-  if (index === 1 || index === 2) return profit * 0.10;
+  
+  if (index === 0) return preciseRound(profit * 0.15, 2);
+  if (index === 1 || index === 2) return preciseRound(profit * 0.10, 2);
   if (index === total - 1) return 0;
-  return profit * 0.05;
+  return preciseRound(profit * 0.05, 2);
 }
 
 function analyzeSalesData(data, options) {
@@ -58,15 +65,15 @@ function analyzeSalesData(data, options) {
     record.items.forEach(item => {
       const product = productIndex[item.sku];
       if (product) {
-        // РАСЧЕТ ДЛЯ ИТОГОВОГО ПОЛЯ REVENUE: Сумма без скидки (gross revenue)
-        const grossRevenue = item.sale_price * item.quantity;
-        // РАСЧЕТ ДЛЯ ПРИБЫЛИ: Выручка со скидкой (net revenue)
-        const netRevenue = calculateRevenue(item, product);
+        // Грязная выручка (без скидок)
+        const grossRevenue = preciseRound(item.sale_price * item.quantity, 2);
+        // Чистая выручка (со скидкой)
+        const netRevenue = calculateRevenue(item, product); // Эта функция уже округляет до 2 знаков
         
-        const cost = product.purchase_price * item.quantity;
+        const cost = preciseRound(product.purchase_price * item.quantity, 2);
 
-        seller.revenue += grossRevenue; // Используем грязную выручку
-        seller.profit += (netRevenue - cost); // Используем чистую для прибыли
+        seller.revenue += grossRevenue; 
+        seller.profit += (netRevenue - cost);
 
         if (!seller.products_sold[item.sku]) {
           seller.products_sold[item.sku] = 0;
@@ -89,11 +96,11 @@ function analyzeSalesData(data, options) {
   return sellerStats.map(seller => ({
     seller_id: seller.id,
     name: seller.name,
-    revenue: +seller.revenue.toFixed(2),
-    profit: +seller.profit.toFixed(2),
+    revenue: preciseRound(seller.revenue, 2),
+    profit: preciseRound(seller.profit, 2),
     sales_count: seller.sales_count,
     top_products: seller.top_products,
-    bonus: +seller.bonus.toFixed(2)
+    bonus: preciseRound(seller.bonus, 2)
   }));
 }
 
