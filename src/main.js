@@ -23,18 +23,12 @@ function validate(data, options) {
 
 // Этап 3. Реализация бизнес-логики
 
-/**
- * Функция для расчета выручки
- */
 function calculateSimpleRevenue(purchase, _product) {
   const { discount, quantity, sale_price } = purchase;
   const discountFactor = 1 - (discount / 100);
   return sale_price * quantity * discountFactor;
 }
 
-/**
- * Функция для расчета бонусов
- */
 function calculateBonusByProfit(index, total, seller) {
   const { profit } = seller;
   if (index === 0) return profit * 0.15;
@@ -43,9 +37,6 @@ function calculateBonusByProfit(index, total, seller) {
   return profit * 0.05;
 }
 
-/**
- * Функция для анализа данных продаж
- */
 function analyzeSalesData(data, options) {
   const { calculateRevenue, calculateBonus } = validate(data, options);
 
@@ -71,13 +62,15 @@ function analyzeSalesData(data, options) {
       const product = productIndex[item.sku];
       if (!product) return;
 
+      // Выручка БЕЗ скидки (для итогового поля revenue)
+      const grossRevenue = item.sale_price * item.quantity;
+      // Выручка СО скидкой (через функцию для расчета profit)
+      const netRevenue = calculateRevenue(item, product);
+      
       const cost = product.purchase_price * item.quantity;
-      // Считаем выручку ОДИН раз через функцию из опций
-      const revenue = calculateRevenue(item, product);
-      const profit = revenue - cost;
 
-      seller.revenue += revenue; 
-      seller.profit += profit;
+      seller.revenue += grossRevenue; 
+      seller.profit += (netRevenue - cost);
 
       if (!seller.products_sold[item.sku]) {
         seller.products_sold[item.sku] = 0;
@@ -86,13 +79,13 @@ function analyzeSalesData(data, options) {
     });
   });
 
-  // Сортировка по прибыли (от большего к меньшему)
+  // Сортировка по прибыли
   sellerStats.sort((a, b) => b.profit - a.profit);
 
   sellerStats.forEach((seller, index) => {
     seller.bonus = calculateBonus(index, sellerStats.length, seller);
     
-    // Формируем топ-10 товаров со стабильной сортировкой
+    // Стабильная сортировка топ-товаров: количество DESC, затем SKU ASC
     seller.top_products = Object.entries(seller.products_sold)
       .map(([sku, quantity]) => ({ sku, quantity }))
       .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
