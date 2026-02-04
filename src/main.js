@@ -20,7 +20,6 @@ function calculateSimpleRevenue(purchase, _product) {
 function calculateBonusByProfit(index, total, seller) {
     // @TODO: Расчет бонуса от позиции в рейтинге
     const profit = seller.profit || 0;
-    if (profit <= 0) return 0;
     if (index === 0) return profit * 0.15;
     if (index === 1 || index === 2) return profit * 0.10;
     if (index === total - 1 && total > 1) return 0;
@@ -76,14 +75,17 @@ function analyzeSalesData(data, options) {
         record.items.forEach(item => {
             const product = productIndex[item.sku];
             if (product) {
-                // Считаем без промежуточного округления для точности
-                const itemRevenue = calculateRevenue(item, product);
-                const cost = product.purchase_price * item.quantity;
+                // ВАЖНО: Округляем выручку КАЖДОЙ позиции сразу
+                const itemRevenue = round(calculateRevenue(item, product));
+                const cost = round(product.purchase_price * item.quantity);
 
                 seller.revenue += itemRevenue;
                 seller.profit += (itemRevenue - cost);
 
-                seller.productsSold[item.sku] = (seller.productsSold[item.sku] || 0) + item.quantity;
+                if (!seller.productsSold[item.sku]) {
+                    seller.productsSold[item.sku] = 0;
+                }
+                seller.productsSold[item.sku] += item.quantity;
             }
         });
     });
@@ -93,20 +95,25 @@ function analyzeSalesData(data, options) {
 
     // @TODO: Назначение премий на основе ранжирования
     return sellerStats.map((seller, index) => {
-        const bonusValue = calculateBonus(index, sellerStats.length, seller);
+        const bonusRaw = calculateBonus(index, sellerStats.length, seller);
 
         const topProductsList = Object.entries(seller.productsSold)
-            .map(([sku, quantity]) => ({ sku, quantity }))
+            .map(([sku, quantity]) => ({
+                sku: sku,
+                quantity: quantity
+            }))
             .sort((a, b) => {
-                if (b.quantity !== a.quantity) return b.quantity - a.quantity;
-                // Использование строгого сравнения вместо localeCompare для прохождения тестов
-                return a.sku < b.sku ? -1 : a.sku > b.sku ? 1 : 0;
+                if (b.quantity !== a.quantity) {
+                    return b.quantity - a.quantity;
+                }
+                // Используем прямое сравнение строк для стабильности в тестах
+                return a.sku < b.sku ? -1 : (a.sku > b.sku ? 1 : 0);
             })
             .slice(0, 10);
 
         // @TODO: Подготовка итоговой коллекции с алфавитным порядком ключей
         return {
-            bonus: round(bonusValue),
+            bonus: round(bonusRaw),
             name: seller.name,
             profit: round(seller.profit),
             revenue: round(seller.revenue),
