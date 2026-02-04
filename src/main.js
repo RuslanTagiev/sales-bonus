@@ -89,30 +89,28 @@ function analyzeSalesData(data, options) {
     // Вызываем calculateBonus, которую мы достали из options
     seller.bonus = calculateBonus(index, sellerStats.length, seller);
 
-    seller.top_products = Object.entries(seller.products_sold)
+seller.top_products = Object.entries(seller.products_sold)
   .map(([sku, quantity]) => ({ sku, quantity }))
   .sort((a, b) => {
-    // 1. Сначала сортируем по количеству (убывание)
+    // Если количество разное — сортируем по количеству (убывание)
     if (b.quantity !== a.quantity) {
       return b.quantity - a.quantity;
     }
-    // 2. Если количество одинаковое, строго по SKU (возрастание / алфавит)
-    if (a.sku < b.sku) return -1;
-    if (a.sku > b.sku) return 1;
-    return 0;
+    // Если количество одинаковое — СТРОГО по алфавиту SKU (возрастание)
+    return a.sku < b.sku ? -1 : 1;
   })
   .slice(0, 10);
   });
 
   // Формирование итогового результата
-  return sellerStats.map(seller => ({
-    seller_id: seller.id,
-    name: seller.name,
-    revenue: +seller.revenue.toFixed(2),
-    profit: +seller.profit.toFixed(2),
-    sales_count: seller.sales_count,
-    top_products: seller.top_products,
-    bonus: +seller.bonus.toFixed(2)
-  }));
+return sellerStats.map(seller => ({
+  seller_id: seller.id,
+  name: seller.name,
+  revenue: Math.round(seller.revenue * 100) / 100, // Более надежный способ округления
+  profit: Math.round(seller.profit * 100) / 100,
+  sales_count: seller.sales_count,
+  top_products: seller.top_products,
+  bonus: Math.round(seller.bonus * 100) / 100
+}));
 }
 
