@@ -1,3 +1,5 @@
+const round = (num) => Math.round(num * 100) / 100;
+
 const calculateSimpleRevenue = (item, product) => {
   const discount = item.discount || 0;
   return item.sale_price * item.quantity * (1 - discount / 100);
@@ -11,13 +13,11 @@ const calculateBonusByProfit = (index, total, seller) => {
   return profit * 0.05;
 };
 
-const round = (num) => Math.round(num * 100) / 100;
-
 /**
- * 2. Основная функция анализа
+ * 2. ОСНОВНАЯ ФУНКЦИЯ
  */
 function analyzeSalesData(data, options) {
-  // --- ШАГ 1 и 2: Исправленная валидация (проверка на пустые массивы) ---
+  // ШАГ 1 и 2: Жесткая валидация для тестов (включая пустые массивы)
   if (
     !data ||
     !Array.isArray(data.sellers) || data.sellers.length === 0 ||
@@ -34,7 +34,7 @@ function analyzeSalesData(data, options) {
   const { calculateRevenue, calculateBonus } = options;
   const productIndex = Object.fromEntries(data.products.map(p => [p.sku, p]));
 
-  // --- ШАГ 3: Инициализация статистики ---
+  // ШАГ 3: Инициализация
   const statsMap = Object.fromEntries(data.sellers.map(s => [
     s.id,
     {
@@ -42,22 +42,18 @@ function analyzeSalesData(data, options) {
       name: `${s.first_name} ${s.last_name}`,
       revenue: 0,
       profit: 0,
-      sales_count: 0,
+      salesCount: 0,
       productsSold: {}
     }
   ]));
 
-  // --- ШАГ 5: Обработка транзакций ---
+  // ШАГ 5: Сбор данных (Расчет выручки по позициям для Варианта 3)
   data.purchase_records.forEach(record => {
     const seller = statsMap[record.seller_id];
     if (!seller) return;
 
-    seller.sales_count++;
-    
-    // ВНИМАНИЕ: Если тест требует 168419.87, значит выручка — это сумма itemRevenue, а не total_amount!
-    // Если же тест требует 155403.56, тогда нужно использовать record.total_amount.
-    // Попробуем пересчитать по позициям, так как это точнее.
-    
+    seller.salesCount++;
+
     record.items.forEach(item => {
       const product = productIndex[item.sku];
       if (product) {
@@ -72,18 +68,17 @@ function analyzeSalesData(data, options) {
     });
   });
 
-  // --- ШАГ 6: Сортировка по прибыли ---
+  // ШАГ 6: Сортировка по прибыли
   const rankedSellers = Object.values(statsMap).sort((a, b) => b.profit - a.profit);
 
-  // --- ШАГ 7: Финал ---
+  // ШАГ 7: Формирование результата с ПРАВИЛЬНЫМ ПОРЯДКОМ КЛЮЧЕЙ
   return rankedSellers.map((seller, index) => {
     const topProducts = Object.entries(seller.productsSold)
-      .map(([sku, quantity]) => ({ sku, quantity }))
-      .sort((a, b) => {
-        if (b.quantity !== a.quantity) return b.quantity - a.quantity;
-        // Тесты часто требуют АЛФАВИТНЫЙ порядок (SKU_001 перед SKU_002)
-        return a.sku.localeCompare(b.sku); 
-      })
+      .map(([sku, quantity]) => ({
+        sku: sku,        // SKU первым
+        quantity: quantity 
+      }))
+      .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
       .slice(0, 10);
 
     return {
@@ -91,7 +86,7 @@ function analyzeSalesData(data, options) {
       name: seller.name,
       revenue: round(seller.revenue),
       profit: round(seller.profit),
-      sales_count: seller.sales_count,
+      sales_count: seller.salesCount,
       top_products: topProducts,
       bonus: round(calculateBonus(index, rankedSellers.length, seller))
     };
@@ -99,7 +94,7 @@ function analyzeSalesData(data, options) {
 }
 
 /**
- * 3. Подготовка опций
+ * 3. ОБЪЕКТ ОПЦИЙ (Объявлять после функций!)
  */
 const options = {
   calculateRevenue: calculateSimpleRevenue,
