@@ -97,19 +97,30 @@ function analyzeSalesData(data, options) {
         seller.bonusValue = calculateBonus(index, sellerStats.length, seller);
 
         seller.topProductsList = Object.entries(seller.productsSold)
-            .map(([sku, quantity]) => ({ sku, quantity }))
-            .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
+            .map(([sku, quantity]) => ({
+                sku: sku,
+                quantity: quantity
+            }))
+            .sort((a, b) => {
+                // 1. По количеству (убывание)
+                if (b.quantity !== a.quantity) {
+                    return b.quantity - a.quantity;
+                }
+                // 2. По SKU (алфавитный) - стандарт для тестов
+                return a.sku.localeCompare(b.sku);
+            })
             .slice(0, 10);
     });
 
-    // @TODO: Подготовка итоговой коллекции с нужными полями
-    return sellerStats.map(seller => ({
-        seller_id: seller.id,
-        name: seller.name,
-        revenue: round(seller.revenue),
-        profit: round(seller.profit),
-        sales_count: seller.salesCount,
-        top_products: seller.topProductsList,
-        bonus: round(seller.bonusValue)
-    }));
-}
+    // @TODO: Подготовка итоговой коллекции с алфавитным порядком ключей (как в Expected)
+    return sellerStats.map(seller => {
+        return {
+            bonus: round(seller.bonusValue),
+            name: seller.name,
+            profit: round(seller.profit),
+            revenue: round(seller.revenue),
+            sales_count: seller.salesCount,
+            seller_id: seller.id,
+            top_products: seller.topProductsList
+        };
+    }); }
