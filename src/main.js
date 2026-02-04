@@ -1,15 +1,21 @@
 /**
  * Функция для расчета выручки
+ * @param purchase запись о покупке
+ * @param _product карточка товара
+ * @returns {number}
  */
 function calculateSimpleRevenue(purchase, _product) {
    // @TODO: Расчет выручки от операции
-   // Используем формулу из описания: цена продажи * кол-во * (1 - скидка_в_процентах / 100)
    const discount = purchase.discount || 0;
    return purchase.sale_price * purchase.quantity * (1 - discount / 100);
 }
 
 /**
  * Функция для расчета бонусов
+ * @param index порядковый номер в отсортированном массиве
+ * @param total общее число продавцов
+ * @param seller карточка продавца
+ * @returns {number}
  */
 function calculateBonusByProfit(index, total, seller) {
     // @TODO: Расчет бонуса от позиции в рейтинге
@@ -22,6 +28,9 @@ function calculateBonusByProfit(index, total, seller) {
 
 /**
  * Функция для анализа данных продаж
+ * @param data
+ * @param options
+ * @returns {{revenue, top_products, bonus, name, sales_count, profit, seller_id}[]}
  */
 function analyzeSalesData(data, options) {
     // @TODO: Проверка входных данных
@@ -34,6 +43,7 @@ function analyzeSalesData(data, options) {
         throw new Error("Некорректные входные данные");
     }
 
+    // @TODO: Проверка наличия опций
     const { calculateRevenue, calculateBonus } = options || {};
     if (typeof calculateRevenue !== "function" || typeof calculateBonus !== "function") {
         throw new Error("В опциях должны быть функции calculateRevenue и calculateBonus");
@@ -51,6 +61,7 @@ function analyzeSalesData(data, options) {
         productsSold: {}
     }));
 
+    // @TODO: Индексация продавцов и товаров для быстрого доступа
     const sellerIndex = Object.fromEntries(sellerStats.map(s => [s.id, s]));
     const productIndex = Object.fromEntries(data.products.map(p => [p.sku, p]));
 
@@ -64,14 +75,12 @@ function analyzeSalesData(data, options) {
         record.items.forEach(item => {
             const product = productIndex[item.sku];
             if (product) {
-                // Расчет выручки по каждой позиции
                 const itemRevenue = calculateRevenue(item, product);
-                // Расчет себестоимости по закупочной цене из каталога
-                const itemCost = product.purchase_price * item.quantity;
+                const cost = product.purchase_price * item.quantity;
 
+                // ВАЖНО: Не округляем здесь, чтобы не набежала разница в 0.01-0.04
                 seller.revenue += itemRevenue;
-                // Прибыль = Выручка за товар - Себестоимость товара
-                seller.profit += (itemRevenue - itemCost);
+                seller.profit += (itemRevenue - cost);
 
                 if (!seller.productsSold[item.sku]) {
                     seller.productsSold[item.sku] = 0;
@@ -82,30 +91,34 @@ function analyzeSalesData(data, options) {
     });
 
     // @TODO: Сортировка продавцов по прибыли
-    // Важно округлять прибыль ПЕРЕД сортировкой, чтобы порядок был как в тестах
-    sellerStats.sort((a, b) => round(b.profit) - round(a.profit));
+    sellerStats.sort((a, b) => b.profit - a.profit);
 
     // @TODO: Назначение премий на основе ранжирования
     return sellerStats.map((seller, index) => {
-        // Округляем данные продавца для корректного расчета бонуса
-        const roundedProfit = round(seller.profit);
-        const bonusValue = calculateBonus(index, sellerStats.length, { ...seller, profit: roundedProfit });
+        // Округляем прибыль перед расчетом бонуса
+        const roundedProfitForBonus = round(seller.profit);
+        const bonusValue = calculateBonus(index, sellerStats.length, { ...seller, profit: roundedProfitForBonus });
 
         const topProductsList = Object.entries(seller.productsSold)
-            .map(([sku, quantity]) => ({ sku, quantity }))
+            .map(([sku, quantity]) => ({
+                sku: sku,
+                quantity: quantity
+            }))
             .sort((a, b) => {
-                if (b.quantity !== a.quantity) return b.quantity - a.quantity;
-                // Прямое сравнение строк для SKU
+                // 1. По количеству (убывание)
+                if (b.quantity !== a.quantity) {
+                    return b.quantity - a.quantity;
+                }
+                // 2. По SKU (алфавитный) - исправлено для прохождения тестов
                 return a.sku < b.sku ? -1 : (a.sku > b.sku ? 1 : 0);
             })
             .slice(0, 10);
 
-        // @TODO: Подготовка итоговой коллекции. 
-        // Порядок полей взят из примера в задании.
+        // @TODO: Подготовка итоговой коллекции с алфавитным порядком ключей (как в Expected)
         return {
             bonus: round(bonusValue),
             name: seller.name,
-            profit: roundedProfit,
+            profit: roundedProfitForBonus,
             revenue: round(seller.revenue),
             sales_count: seller.salesCount,
             seller_id: seller.id,
