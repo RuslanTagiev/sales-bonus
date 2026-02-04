@@ -90,9 +90,18 @@ function analyzeSalesData(data, options) {
     seller.bonus = calculateBonus(index, sellerStats.length, seller);
 
     seller.top_products = Object.entries(seller.products_sold)
-      .map(([sku, quantity]) => ({ sku, quantity }))
-      .sort((a, b) => b.quantity - a.quantity || a.sku.localeCompare(b.sku))
-      .slice(0, 10);
+  .map(([sku, quantity]) => ({ sku, quantity }))
+  .sort((a, b) => {
+    // 1. Сначала сортируем по количеству (убывание)
+    if (b.quantity !== a.quantity) {
+      return b.quantity - a.quantity;
+    }
+    // 2. Если количество одинаковое, строго по SKU (возрастание / алфавит)
+    if (a.sku < b.sku) return -1;
+    if (a.sku > b.sku) return 1;
+    return 0;
+  })
+  .slice(0, 10);
   });
 
   // Формирование итогового результата
