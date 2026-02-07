@@ -1,5 +1,5 @@
 /**
- * Функция для расчета выручки (Аналогично первой версии)
+ * Функция для расчета выручки
  * @param purchase запись о покупке
  * @param _product карточка товара
  * @returns {number}
@@ -7,12 +7,11 @@
 function calculateSimpleRevenue(purchase, _product) {
    // @TODO: Расчет выручки от операции
    const discount = purchase.discount || 0;
-   // В первой версии: item.sale_price * item.quantity * (1 - item.discount / 100)
    return purchase.sale_price * purchase.quantity * (1 - discount / 100);
 }
 
 /**
- * Функция для расчета бонусов (Переписана под логику первой версии)
+ * Функция для расчета бонусов
  * @param index порядковый номер в отсортированном массиве
  * @param total общее число продавцов
  * @param seller карточка продавца
@@ -20,11 +19,12 @@ function calculateSimpleRevenue(purchase, _product) {
  */
 function calculateBonusByProfit(index, total, seller) {
     // @TODO: Расчет бонуса от позиции в рейтинге
-    // В первой версии расчет идет как 10% от СРЕДНЕЙ прибыли (bonusHighestAverageProfit)
-    // Здесь мы адаптируем это под текущую структуру: 10% от прибыли для Топ-1, 5% для остальных
     const profit = seller.profit || 0;
-    if (index === 0) return profit * 0.10; 
-    return profit * 0.05;
+    // Исправлено согласно ожиданиям тестов:
+    if (index === 0) return profit * 0.15; // 150 при профите 1000
+    if (index === 1 || index === 2) return profit * 0.10; // 100 при профите 1000
+    if (index === total - 1 && total > 1) return 0; // Последний получает 0
+    return profit * 0.05; // Остальные 5%
 }
 
 /**
@@ -50,8 +50,8 @@ function analyzeSalesData(data, options) {
         throw new Error("В опциях должны быть функции calculateRevenue и calculateBonus");
     }
 
-    // Используем способ округления из первой версии (+val.toFixed(2))
-    const round = (num) => +(num).toFixed(2);
+    // Используем точное округление до 2 знаков
+    const round = (num) => Math.round(num * 100) / 100;
 
     // @TODO: Подготовка промежуточных данных для сбора статистики
     const sellerStats = data.sellers.map(seller => ({
@@ -60,7 +60,6 @@ function analyzeSalesData(data, options) {
         revenue: 0,
         profit: 0,
         salesCount: 0,
-        totalItemsCount: 0, // Добавлено для расчета средней прибыли как в v1
         productsSold: {}
     }));
 
@@ -73,21 +72,18 @@ function analyzeSalesData(data, options) {
         const seller = sellerIndex[record.seller_id];
         if (!seller) return;
 
-        // В первой версии salesCount — это не количество записей, а количество проданных позиций (items)
+        // В тестах sales_count считается по количеству чеков (записей), а не позиций
+        seller.salesCount += 1;
+
         record.items.forEach(item => {
             const product = productIndex[item.sku];
             if (product) {
                 const itemRevenue = calculateRevenue(item, product);
-                
-                // Логика simpleProfit из первой версии:
-                // revenue - (purchase_price * quantity)
                 const cost = product.purchase_price * item.quantity;
-                const itemProfit = itemRevenue - cost;
 
+                // Накапливаем без промежуточного округления
                 seller.revenue += itemRevenue;
-                seller.profit += itemProfit;
-                seller.totalItemsCount += 1;
-                seller.salesCount += 1; // Увеличиваем счетчик за каждую позицию
+                seller.profit += (itemRevenue - cost);
 
                 if (!seller.productsSold[item.sku]) {
                     seller.productsSold[item.sku] = 0;
@@ -97,16 +93,14 @@ function analyzeSalesData(data, options) {
         });
     });
 
-    // @TODO: Сортировка продавцов по прибыли (как во второй версии)
+    // @TODO: Сортировка продавцов по прибыли
     sellerStats.sort((a, b) => b.profit - a.profit);
 
     // @TODO: Назначение премий на основе ранжирования
     return sellerStats.map((seller, index) => {
-        // Округляем как в первой версии перед передачей в бонусную функцию
-        const currentProfit = round(seller.profit);
-        
-        // Передаем данные в calculateBonus (которая теперь берет % от прибыли)
-        const bonusValue = calculateBonus(index, sellerStats.length, { ...seller, profit: currentProfit });
+        // Округляем прибыль ПЕРЕД расчетом бонуса (как требует тест)
+        const roundedProfitForBonus = round(seller.profit);
+        const bonusValue = calculateBonus(index, sellerStats.length, { ...seller, profit: roundedProfitForBonus });
 
         const topProductsList = Object.entries(seller.productsSold)
             .map(([sku, quantity]) => ({
@@ -121,11 +115,11 @@ function analyzeSalesData(data, options) {
             })
             .slice(0, 10);
 
-        // @TODO: Подготовка итоговой коллекции с алфавитным порядком ключей
+        // @TODO: Подготовка итоговой коллекции
         return {
             bonus: round(bonusValue),
             name: seller.name,
-            profit: currentProfit,
+            profit: roundedProfitForBonus,
             revenue: round(seller.revenue),
             sales_count: seller.salesCount,
             seller_id: seller.id,
