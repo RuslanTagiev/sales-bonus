@@ -126,4 +126,5 @@ function analyzeSalesData(data, options) {
             top_products: topProductsList
         };
     });
+    
 }
